@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pruning_mode>
+	<mode>rate</mode>
+</pruning_mode>
+<pruning_test>
+<layer name="resx5_1_conv1" cut="0.05"></layer>
+<layer name="resx6_1_conv1" cut="0.05"></layer>
+<layer name="resx7_1_conv1" cut="0.05"></layer>
+<layer name="resx8_1_conv1" cut="0.05"></layer>
+<layer name="resx9_1_conv1" cut="0.05"></layer>
+<layer name="resx11_1_conv1" cut="0.05"></layer>
+<layer name="conv3" cut="0.20"></layer>
+</pruning_test>
+<caffemodelpath>D:/MINE/c/compression/compression/car_pose/_iter_199000.caffemodel</caffemodelpath>
+<protopath>D:/MINE/c/compression/compression/car_pose/mobilenet_v2_pose_cut1_test.prototxt</protopath>
+<prunedcaffemodelpath>D:/MINE/c/compression/compression/car_pose/rate10.caffemodel</prunedcaffemodelpath>
+<prunedprotopath>D:/MINE/c/compression/compression/car_pose/rate10.prototxt</prunedprotopath>
+<txtprotopath>D:/MINE/c/compression/compression/car_pose/rate10.txt</txtprotopath>

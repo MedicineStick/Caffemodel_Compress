@@ -1,0 +1,120 @@
+#pragma once
+#include<string>
+#include<map>
+#include<vector>
+#include<iostream>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/xml_parser.hpp>
+#include "caffe/proto/caffe.pb.h"
+
+typedef google::protobuf::int64 int_64;
+typedef std::pair<double, int_64> param;
+typedef std::pair<std::string, param> convParam;
+typedef std::vector<convParam> convParams;
+typedef std::pair<convParam, convParams> record;
+typedef std::pair<int, double> atom;
+typedef atom* Patom;
+
+#define _RATE_ "rate"
+#define _SCALE_ "scale"
+#define less(A,B)(*A < *B)
+#define min(A,B)(less(A,B))?*A:*B
+#define eq(A,B)(!less(A,B)&&!less(B,A))
+#define exch(A,B){Patom t = A; A = B; B = t;}
+#define compexch(A,B)if(less(B,A)) exch(A,B);
+
+class Pruner
+{
+public:
+	Pruner();
+	Pruner(std::string xml_path);
+	void start();
+	void read_XML(std::string xml_path);
+	void import();
+	inline void pruning(){
+		if (pruning_mode == _RATE_){
+			pruningByRate();
+		}
+		else if (pruning_mode == _SCALE_){
+			pruningByScale();
+		}
+		else{
+			std::cout << "Incorrect Pruning mode" << std::endl;
+		}
+	};
+	inline std::string doubleToString(double num)
+	{
+		char str[256];
+		sprintf(str, "%lf", num);
+		std::string result = str;
+		return result;
+	};
+	inline std::string intToString(int_64 i){
+		std::stringstream stream;
+		stream << i;
+		return stream.str();
+	};
+
+	/*template <template T>
+	int compare(const T &v1, const T &v2){
+	if (v1 < v2)return -1;
+	if (v1 > v2)return 1;
+	return 0;
+	}*/
+	bool eltwiseCheck(std::string name);
+	bool checkIsConv(std::string name);
+	void hS(std::vector<atom>* a, int l, int r);
+	void fixUp(std::vector<atom>* a, int k);
+	void fixDown(std::vector<atom>* a, int k, int N);
+	void pruningByRate();
+	void pruningConvByRate(record r, std::vector<int>* channelNeedPrune);
+	void pruningBottomByRate(record r, std::vector<int>* channelNeedPrune);
+	int writePrototxt(std::string prototxt1, std::string prototxt2);
+
+	void batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune, int num_);
+	void filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune, int num_);
+	void channelPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune, int num_);
+
+	void pruningByScale();
+	inline bool findInt(std::vector<int>::iterator beg, std::vector<int>::iterator end, int ival){
+		while (beg != end){
+			if (*beg == ival){
+				break;
+			}
+			else{
+				++beg;
+			}
+		}
+		if (beg != end){
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	};
+	void writeModel();
+	~Pruner();
+
+	std::string xml_Path;
+	std::string pruning_caffemodel_path;
+	std::string pruning_proto_path;
+	std::string pruned_caffemodel_path;
+	std::string pruned_proto_path;
+	std::string txt_proto_path;
+	std::string pruning_mode;
+
+private:
+	std::vector<convParam> pruning_rate;
+	std::vector<convParam> pruning_rate_eltwise;
+	boost::property_tree::ptree configure;
+	caffe::NetParameter proto;
+	std::vector<record> conv;
+	convParams depthWiseConv;
+	std::vector<record>::iterator incur;
+	::google::protobuf::RepeatedPtrField< caffe::LayerParameter >* layer;
+	::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator it;
+	std::map<std::string, std::vector<int>> kernel_pruning;
+	std::map < std::string, std::vector<int>> channel_pruning;
+
+};
