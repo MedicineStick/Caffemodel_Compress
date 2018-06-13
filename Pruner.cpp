@@ -3,13 +3,11 @@
 #include <cmath>
 #include <fstream>
 
-
 using namespace caffe;
 using namespace std;
 
 Pruner::Pruner(){
 }
-
 
 Pruner::Pruner(string xml_path){
 	xml_Path = xml_path;
@@ -31,13 +29,15 @@ void Pruner::start(){
 
 void Pruner::read_XML(string xml_path){
 	read_xml(xml_path, configure);
-	boost::property_tree::ptree layers = configure.get_child("pruning_test");
+	boost::property_tree::ptree layers = configure.get_child("filterpruning");
 	pruning_caffemodel_path = configure.get<string>("caffemodelpath");
 	pruning_proto_path = configure.get<string>("protopath");
 	pruned_caffemodel_path = configure.get<string>("prunedcaffemodelpath");
 	pruned_proto_path = configure.get<string>("prunedprotopath");
 	txt_proto_path = configure.get<string>("txtprotopath");
 	pruning_mode = configure.get<string>("pruning_mode.mode");
+	convCalculateMode = atoi(configure.get<string>("ConvCalculateMode.mode").c_str());
+	
 	ReadProtoFromBinaryFile(pruning_caffemodel_path, &proto);
 	layer = proto.mutable_layer();
 	for (boost::property_tree::ptree::iterator it1 = layers.begin(); it1 != layers.end(); it1++){
@@ -50,24 +50,13 @@ void Pruner::read_XML(string xml_path){
 		double rate = atof(cut.c_str());
 		for (it = layer->begin(); it != layer->end(); it++){
 			if (name == it->name()){
-				/*if (eltwiseCheck(name)){
-					pruning_rate.push_back(convParam(name, param(rate, it->blobs(0).shape().dim(0))));
-					depthWiseConv.push_back(convParam(it->name(), param(rate, it->blobs(0).shape().dim(0))));
-					break;
-				}
-				else{
-					pruning_rate_eltwise.push_back(convParam(name, param(rate, it->blobs(0).shape().dim(0))));
-					break;
-				}*/
 				pruning_rate.push_back(convParam(name, param(rate, it->blobs(0).shape().dim(0))));
-				depthWiseConv.push_back(convParam(it->name(), param(rate, it->blobs(0).shape().dim(0))));
+				convNeedRewriteOnPrototxt.push_back(convParam(it->name(), param(rate, it->blobs(0).shape().dim(0))));
 				break;
 			}
 		}
 	}
 }
-
-
 
 void Pruner::import(){
 	it = layer->begin();
@@ -94,7 +83,7 @@ void Pruner::import(){
 
 							if (prunedConvName == it->bottom(0)){
 								b1.push_back(convParam(it->name(), param(rate, it->blobs(0).shape().dim(0))));
-								depthWiseConv.push_back(convParam(it->name(), param(rate, it->blobs(0).shape().dim(0))));
+								convNeedRewriteOnPrototxt.push_back(convParam(it->name(), param(rate, it->blobs(0).shape().dim(0))));
 								break;
 							}
 						}
@@ -132,6 +121,7 @@ void Pruner::pruningByRate(){
 		pruningBottomByRate(conv.at(i), &channelNeedPrune);
 	}
 }
+
 void Pruner::hS(vector<atom>* a, int l, int r){
 	int k;
 	int N = r - l + 1;
@@ -143,12 +133,14 @@ void Pruner::hS(vector<atom>* a, int l, int r){
 		fixDown(a, 1, --N);
 	}
 }
+
 void Pruner::fixUp(vector<atom>* a, int k){
 	while (k > 1 && less(&a->at(k / 2).second, &a->at(k).second)){
 		swap(a->at(k), a->at(k / 2));
 		k = k / 2;
 	}
 }
+
 void Pruner::fixDown(vector<atom>* a, int k, int N){
 	int j;
 	while (2 * k <= N){
@@ -170,13 +162,14 @@ void Pruner::writeModel(){
 }
 
 bool Pruner::eltwiseCheck(string name){
-
 	for (::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator it1 = layer->begin(); it1 != layer->end(); it1++){
 		if (it1->bottom_size() != 0){
 			for (int i = 0; i < it1->bottom_size(); i++){
 				if ("Eltwise" == it1->type()){
-					if (it1->bottom(i).find(name) != string::npos){
-						return false;
+					if (it1->bottom(i).find("split") != string::npos){
+						if (it1->bottom(i).find(name) != string::npos){
+							return false;
+						}
 					}
 				}
 			}
@@ -185,15 +178,15 @@ bool Pruner::eltwiseCheck(string name){
 	return true;
 }
 
-bool Pruner::checkIsConv(string name){
-	int count = 0;
-	for (::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator it1 = layer->begin(); it1 != layer->end(); it1++){
-		if (it1->name() == name)
-			if (it1->type() == "Convolution")
-				count++;
-	}
-	return (count == 1) ? true : false;
-}
+//bool Pruner::checkIsConv(string name){
+//	int count = 0;
+//	for (::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator it1 = layer->begin(); it1 != layer->end(); it1++){
+//		if (it1->name() == name)
+//			if (it1->type() == "Convolution")
+//				count++;
+//	}
+//	return (count == 1) ? true : false;
+//}
 
 void Pruner::pruningConvByRate(record r, vector<int>* pchannelNeedPrune){
 
@@ -212,27 +205,62 @@ void Pruner::pruningConvByRate(record r, vector<int>* pchannelNeedPrune){
 			BlobProto blobData = it->blobs(0);
 			double maxData = 0.0;
 			int k = blobData.data_size();
-			for (int i = 0; i < blobData.data_size(); i++){
-				if (maxData < abs(blobData.data(i))){
-					maxData = abs(blobData.data(i));
+			
+			switch (convCalculateMode)
+			{
+			case Pruner::Norm:
+				for (int i = 0; i < blobData.data_size(); i++){
+					if (maxData < abs(blobData.data(i))){
+						maxData = abs(blobData.data(i));
+					}
 				}
-			}
-			for (int i = 0; i < num; i++){
-				double value = 0.0;
-				for (int j = 0; j < count; j++){
-					value += abs(blobData.data(i*count + j)) / maxData;
+				for (int i = 0; i < num; i++){
+					double value = 0.0;
+					for (int j = 0; j < count; j++){
+						value += abs(blobData.data(i*count + j)) / maxData;
+					}
+					atom a = make_pair(i, value / count);
+					convlayervalue.push_back(a);
 				}
-				atom a = make_pair(i, value / count);
-				convlayervalue.push_back(a);
-			}
-			hS(&convlayervalue, 1, num);
-			for (int i = 0; i < cutNum; i++){
-				pchannelNeedPrune->push_back(convlayervalue.at(i + 1).first);
-			}
+				hS(&convlayervalue, 1, num);
+				for (int i = 0; i < cutNum; i++){
+					pchannelNeedPrune->push_back(convlayervalue.at(i + 1).first);
+				}
+				break;
+			case Pruner::L1:
+				for (int i = 0; i < num; i++){
+					double value = 0.0;
+					for (int j = 0; j < count; j++){
+						value += abs(blobData.data(i*count + j));
+					}
+					atom a = make_pair(i, value);
+					convlayervalue.push_back(a);
+				}
+				hS(&convlayervalue, 1, num);
+				for (int i = 0; i < cutNum; i++){
+					pchannelNeedPrune->push_back(convlayervalue.at(i + 1).first);
+				}
+				break;
+			case Pruner::L2:
+				for (int i = 0; i < num; i++){
+					double value = 0.0;
+					for (int j = 0; j < count; j++){
+						value += (blobData.data(i*count + j))*(blobData.data(i*count + j));
+					}
+					atom a = make_pair(i, value);
+					convlayervalue.push_back(a);
+				}
+				hS(&convlayervalue, 1, num);
+				for (int i = 0; i < cutNum; i++){
+					pchannelNeedPrune->push_back(convlayervalue.at(i + 1).first);
+				}
+				break;
+			default:
+				break;
+			}			
 
 			//start prune
 			filterPruning(it, pchannelNeedPrune, num);
-
 
 			//BatchNorm pruning and Scale Pruning
 			it++;
@@ -441,7 +469,7 @@ int  Pruner::writePrototxt(std::string prototxt1, std::string prototxt2){
 		}
 		int index = -1;
 		if (str.find(str1) != -1){
-			for (auto& r : depthWiseConv){
+			for (auto& r : convNeedRewriteOnPrototxt){
 				string s = '"' +  r.first + '"';
 				index = str.find(s);
 				if (index != -1){
@@ -467,7 +495,6 @@ int  Pruner::writePrototxt(std::string prototxt1, std::string prototxt2){
 			fin_out << str << '\n';
 
 		}
-
 
 	}
 
