@@ -2,17 +2,30 @@
 <pruning_mode>
 	<mode>rate</mode>
 </pruning_mode>
-<pruning_test>
-<layer name="resx5_1_conv1" cut="0.05"></layer>
-<layer name="resx6_1_conv1" cut="0.05"></layer>
-<layer name="resx7_1_conv1" cut="0.05"></layer>
-<layer name="resx8_1_conv1" cut="0.05"></layer>
-<layer name="resx9_1_conv1" cut="0.05"></layer>
-<layer name="resx11_1_conv1" cut="0.05"></layer>
-<layer name="conv3" cut="0.20"></layer>
-</pruning_test>
-<caffemodelpath>D:/MINE/c/compression/compression/car_pose/_iter_199000.caffemodel</caffemodelpath>
-<protopath>D:/MINE/c/compression/compression/car_pose/mobilenet_v2_pose_cut1_test.prototxt</protopath>
-<prunedcaffemodelpath>D:/MINE/c/compression/compression/car_pose/rate10.caffemodel</prunedcaffemodelpath>
-<prunedprotopath>D:/MINE/c/compression/compression/car_pose/rate10.prototxt</prunedprotopath>
-<txtprotopath>D:/MINE/c/compression/compression/car_pose/rate10.txt</txtprotopath>
+
+<ConvCalculateMode>
+	<mode>12</mode>
+</ConvCalculateMode>
+
+<!-- Do not use filterpruning on a conv layer which before split layer 
+eg:: shotcut? 
+ --> 
+<filterpruning>
+<layer name="1_conv1" cut="0.10"></layer>
+<layer name="1_resx6_conv3" cut="0.10"></layer>
+</filterpruning>
+
+<!-- channelpruning ONLY can be using on convolution layer which subsequent to Eltwise layer --> 
+<channelpruning>
+<layer name="1_resx4_1_conv1" cut="0.10">
+<bottom name="1_resx6_conv3"></bottom>
+<bottom name="1_resx5_conv3"></bottom>
+<bottom name="1_resx4_conv3"></bottom>
+</layer>
+</channelpruning>
+
+<caffemodelpath>D:/MINE/c/compression/compression/car_type/test3.caffemodel</caffemodelpath>
+<protopath>D:/MINE/c/compression/compression/car_type/M_t_c.prototxt</protopath>
+<prunedcaffemodelpath>D:/MINE/c/compression/compression/car_type/rate10.caffemodel</prunedcaffemodelpath>
+<prunedprotopath>D:/MINE/c/compression/compression/car_type/rate10.prototxt</prunedprotopath>
+<txtprotopath>D:/MINE/c/compression/compression/car_type/rate10.txt</txtprotopath>
