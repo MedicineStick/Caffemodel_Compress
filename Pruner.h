@@ -103,6 +103,13 @@ public:
 	std::string pruned_proto_path;
 	std::string txt_proto_path;
 	std::string pruning_mode;
+	
+	enum ConvCalculateMode
+	{
+		Norm = 8, L1 = 11, L2 = 12
+	};
+
+	int convCalculateMode;
 
 private:
 	std::vector<convParam> pruning_rate;
@@ -110,7 +117,8 @@ private:
 	boost::property_tree::ptree configure;
 	caffe::NetParameter proto;
 	std::vector<record> conv;
-	convParams depthWiseConv;
+	std::vector<record> eltwiseConv;
+	convParams convNeedRewriteOnPrototxt;
 	std::vector<record>::iterator incur;
 	::google::protobuf::RepeatedPtrField< caffe::LayerParameter >* layer;
 	::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator it;
