@@ -12,8 +12,10 @@ typedef std::pair<double, int_64> param;
 typedef std::pair<std::string, param> convParam;
 typedef std::vector<convParam> convParams;
 typedef std::pair<convParam, convParams> record;
+typedef record* precord;
 typedef std::pair<int, double> atom;
 typedef atom* Patom;
+
 
 #define _RATE_ "rate"
 #define _SCALE_ "scale"
@@ -32,14 +34,12 @@ public:
 	void read_XML(std::string xml_path);
 	void import();
 	inline void pruning(){
-		if (pruning_mode == _RATE_){
+		switch (pruningMode){
+		case rate:
 			pruningByRate();
-		}
-		else if (pruning_mode == _SCALE_){
-			pruningByScale();
-		}
-		else{
-			std::cout << "Incorrect Pruning mode" << std::endl;
+		case size:
+			pruningBySize();
+		
 		}
 	};
 	inline std::string doubleToString(double num)
@@ -55,27 +55,21 @@ public:
 		return stream.str();
 	};
 
-	/*template <template T>
-	int compare(const T &v1, const T &v2){
-	if (v1 < v2)return -1;
-	if (v1 > v2)return 1;
-	return 0;
-	}*/
 	bool eltwiseCheck(std::string name);
 	bool checkIsConv(std::string name);
 	void hS(std::vector<atom>* a, int l, int r);
 	void fixUp(std::vector<atom>* a, int k);
 	void fixDown(std::vector<atom>* a, int k, int N);
 	void pruningByRate();
-	void pruningConvByRate(record r, std::vector<int>* channelNeedPrune);
-	void pruningBottomByRate(record r, std::vector<int>* channelNeedPrune);
+	void pruningConvByRate(const precord r, std::vector<int>* channelNeedPrune);
+	void pruningBottomByRate(const precord r, std::vector<int>* channelNeedPrune);
 	int writePrototxt(std::string prototxt1, std::string prototxt2);
 
 	void batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune, int num_);
 	void filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune, int num_);
 	void channelPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune, int num_);
 
-	void pruningByScale();
+	void pruningBySize();
 	inline bool findInt(std::vector<int>::iterator beg, std::vector<int>::iterator end, int ival){
 		while (beg != end){
 			if (*beg == ival){
@@ -102,14 +96,17 @@ public:
 	std::string pruned_caffemodel_path;
 	std::string pruned_proto_path;
 	std::string txt_proto_path;
-	std::string pruning_mode;
 	
 	enum ConvCalculateMode
 	{
 		Norm = 8, L1 = 11, L2 = 12
 	};
-
+	enum PruningMode
+	{
+		rate = 0, size = 1
+	};
 	int convCalculateMode;
+	int pruningMode;
 
 private:
 	std::vector<convParam> pruning_rate;
