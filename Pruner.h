@@ -17,8 +17,6 @@ typedef std::pair<int, double> atom;
 typedef atom* Patom;
 
 
-#define _RATE_ "rate"
-#define _SCALE_ "scale"
 #define less(A,B)(*A < *B)
 #define min(A,B)(less(A,B))?*A:*B
 #define eq(A,B)(!less(A,B)&&!less(B,A))
