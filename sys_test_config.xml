@@ -1,31 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
-<pruning_mode>
-	<mode>rate</mode>
-</pruning_mode>
 
+<!-- 0:rate  1:size-->
+<PruningMode>
+	<mode>0</mode>
+</PruningMode>
+
+
+<!-- 8:norm 11:L1  12:L2 -->
 <ConvCalculateMode>
-	<mode>12</mode>
+	<mode>11</mode>
 </ConvCalculateMode>
 
 <!-- Do not use filterpruning on a conv layer which before split layer 
 eg:: shotcut? 
  --> 
 <filterpruning>
-<layer name="1_conv1" cut="0.10"></layer>
-<layer name="1_resx6_conv3" cut="0.10"></layer>
+<layer name="resx4_conv1" cut="0.05"></layer>
+<layer name="resx5_conv1" cut="0.05"></layer>
+<layer name="resx6_conv1" cut="0.05"></layer>
+<layer name="resx7_conv1" cut="0.05"></layer>
+<layer name="resx8_conv1" cut="0.20"></layer>
+<layer name="resx9_conv1" cut="0.20"></layer>
+<layer name="resx10_conv1" cut="0.20"></layer>
+<layer name="resx11_conv1" cut="0.20"></layer>
+<layer name="resx12_conv1" cut="0.30"></layer>
+<layer name="resx13_conv1" cut="0.30"></layer>
+<layer name="resx14_conv1" cut="0.30"></layer>
+<layer name="resx15_conv1" cut="0.45"></layer>
+<layer name="resx16_conv1" cut="0.45"></layer>
+<layer name="resx17_conv1" cut="0.45"></layer>
+<layer name="conv2" cut="0.08"></layer>
 </filterpruning>
 
 <!-- channelpruning ONLY can be using on convolution layer which subsequent to Eltwise layer --> 
-<channelpruning>
+<!--<channelpruning>
 <layer name="1_resx4_1_conv1" cut="0.10">
 <bottom name="1_resx6_conv3"></bottom>
 <bottom name="1_resx5_conv3"></bottom>
 <bottom name="1_resx4_conv3"></bottom>
 </layer>
-</channelpruning>
+</channelpruning>-->
 
-<caffemodelpath>D:/MINE/c/compression/compression/car_type/test3.caffemodel</caffemodelpath>
-<protopath>D:/MINE/c/compression/compression/car_type/M_t_c.prototxt</protopath>
+<caffemodelpath>D:/MINE/c/compression/compression/car_type/_iter_158000_bn.caffemodel</caffemodelpath>
+<protopath>D:/MINE/c/compression/compression/car_type/mobilenet_v2_mulit_new_cut.prototxt</protopath>
 <prunedcaffemodelpath>D:/MINE/c/compression/compression/car_type/rate10.caffemodel</prunedcaffemodelpath>
 <prunedprotopath>D:/MINE/c/compression/compression/car_type/rate10.prototxt</prunedprotopath>
 <txtprotopath>D:/MINE/c/compression/compression/car_type/rate10.txt</txtprotopath>
