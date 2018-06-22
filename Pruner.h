@@ -16,7 +16,6 @@ typedef record* precord;
 typedef std::pair<int, double> atom;
 typedef atom* Patom;
 
-
 #define less(A,B)(*A < *B)
 #define min(A,B)(less(A,B))?*A:*B
 #define eq(A,B)(!less(A,B)&&!less(B,A))
@@ -37,7 +36,7 @@ public:
 			pruningByRate();
 		case size:
 			pruningBySize();
-		
+
 		}
 	};
 	inline std::string doubleToString(double num)
@@ -68,16 +67,16 @@ public:
 	void channelPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune, int num_);
 
 	void pruningBySize();
-	inline bool findInt(std::vector<int>::iterator beg, std::vector<int>::iterator end, int ival){
-		while (beg != end){
-			if (*beg == ival){
+	inline bool findInt(std::vector<int>::const_iterator begin, std::vector<int>::const_iterator end, int ival){
+		while (begin != end){
+			if (*begin == ival){
 				break;
 			}
 			else{
-				++beg;
+				++begin;
 			}
 		}
-		if (beg != end){
+		if (begin != end){
 			return true;
 		}
 		else
@@ -94,7 +93,7 @@ public:
 	std::string pruned_caffemodel_path;
 	std::string pruned_proto_path;
 	std::string txt_proto_path;
-	
+
 	enum ConvCalculateMode
 	{
 		Norm = 8, L1 = 11, L2 = 12
@@ -114,7 +113,6 @@ private:
 	std::vector<record> conv;
 	std::vector<record> eltwiseConv;
 	convParams convNeedRewriteOnPrototxt;
-	std::vector<record>::iterator incur;
 	::google::protobuf::RepeatedPtrField< caffe::LayerParameter >* layer;
 	::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator it;
 	std::map<std::string, std::vector<int>> kernel_pruning;
