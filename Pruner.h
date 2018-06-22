@@ -34,9 +34,12 @@ public:
 		switch (pruningMode){
 		case rate:
 			pruningByRate();
+			break;
 		case size:
 			pruningBySize();
-
+			break;
+		default:
+			break;
 		}
 	};
 	inline std::string doubleToString(double num)
@@ -60,7 +63,7 @@ public:
 	void pruningByRate();
 	void pruningConvByRate(const precord r, std::vector<int>* channelNeedPrune);
 	void pruningBottomByRate(const precord r, std::vector<int>* channelNeedPrune);
-	int writePrototxt(std::string prototxt1, std::string prototxt2);
+	int writePrototxt(const std::string prototxt1, const std::string prototxt2);
 
 	void batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune, int num_);
 	void filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune, int num_);
