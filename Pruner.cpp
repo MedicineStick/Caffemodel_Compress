@@ -37,11 +37,11 @@ void Pruner::read_XML(string xml_path){
 	txt_proto_path = configure.get<string>("txtprotopath");
 	pruningMode = atoi(configure.get<string>("PruningMode.mode").c_str());
 	convCalculateMode = atoi(configure.get<string>("ConvCalculateMode.mode").c_str());
-	
+
 	ReadProtoFromBinaryFile(pruning_caffemodel_path, &proto);
 	layer = proto.mutable_layer();
-	for (boost::property_tree::ptree::iterator it1 = layers.begin(); it1 != layers.end(); it1++){
-		boost::property_tree::ptree clayers = it1->second;
+	for (auto it1 = layers.begin(); it1 != layers.end(); it1++){
+		auto clayers = it1->second;
 		string name = clayers.get<string>("<xmlattr>.name");
 		if (!checkIsConv(name)){
 			break;
@@ -60,8 +60,7 @@ void Pruner::read_XML(string xml_path){
 
 void Pruner::import(){
 	it = layer->begin();
-	vector<convParam>::iterator iter1;
-	iter1 = pruning_rate.begin();
+	auto iter1 = pruning_rate.begin();
 	while (iter1 != pruning_rate.end()){
 		it = layer->begin();
 		double rate = iter1->second.first;
@@ -90,7 +89,7 @@ void Pruner::import(){
 
 						else if (it->type() == "Pooling"){
 							poolName = it->name();
-							for (::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator it1 = it; it1 != layer->end(); it1++){
+							for (auto it1 = it; it1 != layer->end(); it1++){
 								if (it1->type() == "Convolution" || it1->type() == "ConvolutionDepthwise"){
 									if (it1->bottom(0).find(poolName) != string::npos){
 										b1.push_back(convParam(it1->name(), param(rate, it1->blobs(0).shape().dim(0))));
@@ -112,10 +111,7 @@ void Pruner::import(){
 }
 
 void Pruner::pruningByRate(){
-
-	incur = conv.begin();
-	
-	for (int i = 0; i < conv.size(); i++){
+	for (string::size_type i = 0; i < conv.size(); i++){
 		vector<int> channelNeedPrune;
 		pruningConvByRate(&conv.at(i), &channelNeedPrune);
 		pruningBottomByRate(&conv.at(i), &channelNeedPrune);
@@ -184,7 +180,7 @@ void Pruner::writeModel(){
 
 bool Pruner::checkIsConv(string name){
 	int count = 0;
-	for (::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator it1 = layer->begin(); it1 != layer->end(); it1++){
+	for (auto it1 = layer->begin(); it1 != layer->end(); it1++){
 		if (it1->name() == name)
 			if (it1->type() == "Convolution")
 				count++;
@@ -209,11 +205,11 @@ void Pruner::pruningConvByRate(const precord r, vector<int>* pchannelNeedPrune){
 			BlobProto blobData = it->blobs(0);
 			double maxData = 0.0;
 			int k = blobData.data_size();
-			
+
 			switch (convCalculateMode)
 			{
 			case Pruner::Norm:
-				for (int i = 0; i < blobData.data_size(); i++){
+				for (size_t i = 0; i < blobData.data_size(); i++){
 					if (maxData < abs(blobData.data(i))){
 						maxData = abs(blobData.data(i));
 					}
@@ -261,7 +257,7 @@ void Pruner::pruningConvByRate(const precord r, vector<int>* pchannelNeedPrune){
 				break;
 			default:
 				break;
-			}			
+			}
 
 			//start prune
 			filterPruning(it, pchannelNeedPrune, num);
@@ -281,8 +277,8 @@ void Pruner::pruningBottomByRate(const precord r, vector<int>* pchannelNeedPrune
 	//preform pruning on next layer 
 	int num = r->first.second.second;
 	int cutNum = (r->first.second.second)*(r->first.second.first);
-	int i1 = r->second.size();
-	for (int k = 0; k < r->second.size(); k++){
+	string::size_type i1 = r->second.size();
+	for (string::size_type k = 0; k < r->second.size(); k++){
 		convParam conv1 = r->second[k];
 		string n = conv1.first;
 		for (it = layer->begin(); it != layer->end(); it++){
@@ -320,8 +316,8 @@ void Pruner::pruningBottomByRate(const precord r, vector<int>* pchannelNeedPrune
 }
 
 void Pruner::batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* pchannelNeedPrune, int num_){
-	vector<int>::iterator beg = pchannelNeedPrune->begin();
-	vector<int>::iterator end = pchannelNeedPrune->end();
+	vector<int>::const_iterator beg = pchannelNeedPrune->begin();
+	vector<int>::const_iterator end = pchannelNeedPrune->end();
 	int cutNum = pchannelNeedPrune->size();
 	BlobProto *bnBlob0_ = it->mutable_blobs(0);
 	BlobProto bnBlob0 = it->blobs(0);
@@ -383,8 +379,8 @@ void Pruner::filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerPar
 	BlobProto *blob_ = it->mutable_blobs(0);
 	BlobProto blob = it->blobs(0);
 	blob_->clear_data();
-	vector<int>::iterator beg = pchannelNeedPrune->begin();
-	vector<int>::iterator end = pchannelNeedPrune->end();
+	vector<int>::const_iterator beg = pchannelNeedPrune->begin();
+	vector<int>::const_iterator end = pchannelNeedPrune->end();
 	for (int j = 0; j < num_; j++){
 		if (!findInt(beg, end, j)){
 			for (int g = 0; g < count; g++){
@@ -429,12 +425,11 @@ void Pruner::channelPruning(::google::protobuf::RepeatedPtrField< caffe::LayerPa
 	BlobProto *blob1_ = iter_->mutable_blobs(0);
 	BlobProto blob1 = iter_->blobs(0);
 	blob1_->clear_data();
-	vector<int>::iterator beg = pchannelNeedPrune->begin();
-	vector<int>::iterator end = pchannelNeedPrune->end();
+	vector<int>::const_iterator beg = pchannelNeedPrune->begin();
+	vector<int>::const_iterator end = pchannelNeedPrune->end();
 	for (int j = 0; j < nextLayKerNum; j++){
 		for (int g = 0; g < nextLayChannel; g++){
 			if (!findInt(beg, end, g)){
-				//blob1_->add_data(j * nextLayKerCount + g);
 				for (int m = 0; m < dimSize; m++){
 					blob1_->add_data(blob1.data(j * counts + g * dimSize + m));
 				}
@@ -474,7 +469,7 @@ int  Pruner::writePrototxt(std::string prototxt1, std::string prototxt2){
 		int index = -1;
 		if (str.find(str1) != -1){
 			for (auto& r : convNeedRewriteOnPrototxt){
-				string s = '"' +  r.first + '"';
+				string s = '"' + r.first + '"';
 				index = str.find(s);
 				if (index != -1){
 					int num = r.second.second;
