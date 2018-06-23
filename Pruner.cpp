@@ -44,7 +44,7 @@ void Pruner::read_XML(string xml_path){
 		auto clayers = it1->second;
 		string name = clayers.get<string>("<xmlattr>.name");
 		if (!checkIsConv(name)){
-			break;
+			continue;
 		}
 		string cut = clayers.get<string>("<xmlattr>.cut");
 		double rate = atof(cut.c_str());
