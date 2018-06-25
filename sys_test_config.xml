@@ -14,6 +14,7 @@
 <!-- Do not use filterpruning on a conv layer which before split layer 
 eg:: shotcut? 
  --> 
+
 <filterpruning>
 <layer name="resx4_conv1" cut="0.05"></layer>
 <layer name="resx5_conv1" cut="0.05"></layer>
@@ -32,17 +33,14 @@ eg:: shotcut?
 <layer name="conv2" cut="0.08"></layer>
 </filterpruning>
 
-<!-- channelpruning ONLY can be using on convolution layer which subsequent to Eltwise layer --> 
-<!--<channelpruning>
-<layer name="1_resx4_1_conv1" cut="0.10">
-<bottom name="1_resx6_conv3"></bottom>
-<bottom name="1_resx5_conv3"></bottom>
-<bottom name="1_resx4_conv3"></bottom>
-</layer>
-</channelpruning>-->
+<!-- channelpruning ONLY can be used on convolution layer which subsequent to Eltwise layer --> 
+<eltwisepruning>
+<layer channels="resx11_conv1,resx10_conv1,resx9_conv1,resx8_conv1" filters="resx7_conv3,resx8_conv3,resx9_conv3,resx10_conv3" cut="0.15"></layer>
+<layer channels="resx14_conv1,resx13_conv1,resx12_conv1" filters="resx11_conv3,resx12_conv3,resx13_conv3" cut="0.10"></layer>
+</eltwisepruning>
 
-<caffemodelpath>D:/MINE/c/compression/compression/car_type/_iter_158000_bn.caffemodel</caffemodelpath>
-<protopath>D:/MINE/c/compression/compression/car_type/mobilenet_v2_mulit_new_cut.prototxt</protopath>
+<caffemodelpath>D:/MINE/c/compression/compression/car_type/_iter_158000.caffemodel</caffemodelpath>
+<protopath>D:/MINE/c/compression/compression/car_type/mobilenet_v2_mulit_new_test.prototxt</protopath>
 <prunedcaffemodelpath>D:/MINE/c/compression/compression/car_type/rate10.caffemodel</prunedcaffemodelpath>
 <prunedprotopath>D:/MINE/c/compression/compression/car_type/rate10.prototxt</prunedprotopath>
 <txtprotopath>D:/MINE/c/compression/compression/car_type/rate10.txt</txtprotopath>
