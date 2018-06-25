@@ -73,9 +73,6 @@ void Pruner::read_XML(const string xml_path){
 		vector<string> bottoms_temp;
 		//importing basis convolution layers' parameters
 		auto clayers = it1->second;
-		if (clayers.empty()){
-			continue;
-		}
 		basis_temp = split(clayers.get<string>("<xmlattr>.channels"), ",");
 		for (auto iter = basis_temp.begin(); iter != basis_temp.end(); iter++){
 			if (!checkIsConv(*iter)){
