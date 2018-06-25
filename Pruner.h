@@ -12,7 +12,9 @@ typedef std::pair<double, int_64> param;
 typedef std::pair<std::string, param> convParam;
 typedef std::vector<convParam> convParams;
 typedef std::pair<convParam, convParams> record;
+typedef std::pair<convParams, convParams> eltwiseRecord;
 typedef record* precord;
+typedef eltwiseRecord* peltwiserecord;
 typedef std::pair<int, double> atom;
 typedef atom* Patom;
 
@@ -21,16 +23,15 @@ typedef atom* Patom;
 #define eq(A,B)(!less(A,B)&&!less(B,A))
 #define exch(A,B){Patom t = A; A = B; B = t;}
 #define compexch(A,B)if(less(B,A)) exch(A,B);
-
 class Pruner
 {
 public:
 	Pruner();
-	Pruner(std::string xml_path);
-	void start();
-	void read_XML(std::string xml_path);
-	void import();
-	inline void pruning(){
+	Pruner(const std::string xml_path);
+	void start(void);
+	void read_XML(const std::string xml_path);
+	void import(void);
+	inline void pruning(void){
 		switch (pruningMode){
 		case rate:
 			pruningByRate();
@@ -55,19 +56,35 @@ public:
 		return stream.str();
 	};
 
-	bool eltwiseCheck(std::string name);
-	bool checkIsConv(std::string name);
+	bool eltwiseCheck(const std::string name);
+	void eltwiseCaculate(const peltwiserecord r, std::vector<int>* channelNeedPrune);
+	bool checkIsConv(const std::string name);
 	void hS(std::vector<atom>* a, int l, int r);
 	void fixUp(std::vector<atom>* a, int k);
 	void fixDown(std::vector<atom>* a, int k, int N);
-	void pruningByRate();
+	void pruningByRate(void);
+	void pruningEltwiseByRate(const peltwiserecord r, std::vector<int>* channelNeedPrune);
 	void pruningConvByRate(const precord r, std::vector<int>* channelNeedPrune);
 	void pruningBottomByRate(const precord r, std::vector<int>* channelNeedPrune);
 	int writePrototxt(const std::string prototxt1, const std::string prototxt2);
-
-	void batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune, int num_);
-	void filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune, int num_);
-	void channelPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune, int num_);
+	inline std::vector<std::string> split(const std::string& str, const std::string& devide){
+		std::vector<std::string> res;
+		if ("" == str) return res;
+		char * strs = new char[str.length() + 1];
+		strcpy(strs, str.c_str());
+		char * d = new char[devide.length() + 1];
+		strcpy(d, devide.c_str());
+		char *p = strtok(strs, d);
+		while (p) {
+			std::string s = p;
+			res.push_back(s);
+			p = strtok(NULL, d);
+		}
+		return res;
+	};
+	void batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune);
+	void filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune);
+	void channelPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* channelNeedPrune);
 
 	void pruningBySize();
 	inline bool findInt(std::vector<int>::const_iterator begin, std::vector<int>::const_iterator end, int ival){
@@ -110,15 +127,11 @@ public:
 
 private:
 	std::vector<convParam> pruning_rate;
-	std::vector<convParam> pruning_rate_eltwise;
 	boost::property_tree::ptree configure;
 	caffe::NetParameter proto;
 	std::vector<record> conv;
-	std::vector<record> eltwiseConv;
+	std::vector<eltwiseRecord> eltwiseConv;
 	convParams convNeedRewriteOnPrototxt;
 	::google::protobuf::RepeatedPtrField< caffe::LayerParameter >* layer;
 	::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator it;
-	std::map<std::string, std::vector<int>> kernel_pruning;
-	std::map < std::string, std::vector<int>> channel_pruning;
-
 };
