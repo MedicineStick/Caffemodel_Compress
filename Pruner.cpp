@@ -9,7 +9,7 @@ using namespace std;
 Pruner::Pruner(){
 }
 
-Pruner::Pruner(string xml_path){
+Pruner::Pruner(const string xml_path){
 	xml_Path = xml_path;
 
 }
@@ -27,9 +27,8 @@ void Pruner::start(){
 
 }
 
-void Pruner::read_XML(string xml_path){
+void Pruner::read_XML(const string xml_path){
 	read_xml(xml_path, configure);
-	boost::property_tree::ptree layers = configure.get_child("filterpruning");
 	pruning_caffemodel_path = configure.get<string>("caffemodelpath");
 	pruning_proto_path = configure.get<string>("protopath");
 	pruned_caffemodel_path = configure.get<string>("prunedcaffemodelpath");
@@ -40,14 +39,20 @@ void Pruner::read_XML(string xml_path){
 
 	ReadProtoFromBinaryFile(pruning_caffemodel_path, &proto);
 	layer = proto.mutable_layer();
+
+	//importing vanilla convolution layers'  parameters  from xml
+	boost::property_tree::ptree layers = configure.get_child("filterpruning");
 	for (auto it1 = layers.begin(); it1 != layers.end(); it1++){
 		auto clayers = it1->second;
-		string name = clayers.get<string>("<xmlattr>.name");
-		if (!checkIsConv(name)){
+		if (clayers.empty()){
 			continue;
 		}
-		string cut = clayers.get<string>("<xmlattr>.cut");
-		double rate = atof(cut.c_str());
+		string name = clayers.get<string>("<xmlattr>.name");
+		if (!checkIsConv(name)){
+			cout << "input incorrect: " + name + " is not a convolution layer" << endl;
+			system("pause");
+		}
+		double rate = atof(clayers.get<string>("<xmlattr>.cut").c_str());
 		for (it = layer->begin(); it != layer->end(); it++){
 			if (name == it->name()){
 				pruning_rate.push_back(convParam(name, param(rate, it->blobs(0).shape().dim(0))));
@@ -55,6 +60,62 @@ void Pruner::read_XML(string xml_path){
 				break;
 			}
 		}
+	}
+
+	//importing eltwise related convolution layers' parameters form xml
+	layers = configure.get_child("eltwisepruning");
+	for (auto it1 = layers.begin(); it1 != layers.end(); it1++){
+		convParams conv_basis_temps;
+		convParams conv_bottom_temps;
+		vector<string> basis_temp;
+		vector<string> bottoms_temp;
+		//importing basis convolution layers' parameters
+		auto clayers = it1->second;
+		if (clayers.empty()){
+			continue;
+		}
+		basis_temp = split(clayers.get<string>("<xmlattr>.channels"), ",");
+		for (auto iter = basis_temp.begin();iter != basis_temp.end();iter++){
+			if (!checkIsConv(*iter)){
+				cout << "input incorrect: " + *iter + " is not a convolution layer" << endl;
+				system("pause");
+			}
+		}
+		double rate = atof(clayers.get<string>("<xmlattr>.cut").c_str());
+		for (auto iter = basis_temp.begin(); iter != basis_temp.end(); iter++){
+			convParam conv_temp;
+			for (it = layer->begin(); it != layer->end(); it++){
+				if (*iter == it->name()){
+					conv_temp.first = *iter;
+					conv_temp.second.first = rate;
+					conv_temp.second.second = it->blobs(0).shape().dim(0);
+					conv_basis_temps.push_back(conv_temp);
+					break;
+				}
+			}
+		}
+		
+
+		//importing children layers' parameters of basis layer
+		string bottoms = clayers.get<string>("<xmlattr>.filters");
+		bottoms_temp = split(bottoms, ",");
+		for (auto it2 = bottoms_temp.begin(); it2 != bottoms_temp.end(); it2 ++){
+			if (!checkIsConv(*it2)){
+				continue;
+			}
+			convParam conv_bottom;
+			for (it = layer->begin(); it != layer->end(); it++){
+				if (*it2 == it->name()){
+					conv_bottom.first = it->name();
+					conv_bottom.second.first = rate;
+					conv_bottom.second.second = it->blobs(0).shape().dim(0);
+					conv_bottom_temps.push_back(conv_bottom);
+					convNeedRewriteOnPrototxt.push_back(conv_bottom);
+					break;
+				}
+			}
+		}
+		eltwiseConv.push_back(make_pair(conv_basis_temps, conv_bottom_temps));
 	}
 }
 
@@ -116,6 +177,11 @@ void Pruner::pruningByRate(){
 		pruningConvByRate(&conv.at(i), &channelNeedPrune);
 		pruningBottomByRate(&conv.at(i), &channelNeedPrune);
 	}
+	for (string::size_type i = 0; i < eltwiseConv.size(); i++){
+		vector<int> channelNeedPrune;
+		eltwiseCaculate(&eltwiseConv.at(i), &channelNeedPrune);
+		pruningEltwiseByRate(&eltwiseConv.at(i), &channelNeedPrune);
+	}
 }
 
 void Pruner::pruningBySize(){
@@ -161,24 +227,24 @@ void Pruner::writeModel(){
 	WriteProtoToBinaryFile(proto, pruned_caffemodel_path);
 }
 
-//bool Pruner::eltwiseCheck(string name){
-//	for (::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator it1 = layer->begin(); it1 != layer->end(); it1++){
-//		if (it1->bottom_size() != 0){
-//			for (int i = 0; i < it1->bottom_size(); i++){
-//				if ("Eltwise" == it1->type()){
-//					if (it1->bottom(i).find("split") != string::npos){
-//						if (it1->bottom(i).find(name) != string::npos){
-//							return false;
-//						}
-//					}
-//				}
-//			}
-//		}
-//	}
-//	return true;
-//}
+bool Pruner::eltwiseCheck(string name){
+	for (::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator it1 = layer->begin(); it1 != layer->end(); it1++){
+		if (it1->bottom_size() != 0){
+			for (int i = 0; i < it1->bottom_size(); i++){
+				if ("Eltwise" == it1->type()){
+					if (it1->bottom(i).find("split") != string::npos){
+						if (it1->bottom(i).find(name) != string::npos){
+							return false;
+						}
+					}
+				}
+			}
+		}
+	}
+	return true;
+}
 
-bool Pruner::checkIsConv(string name){
+bool Pruner::checkIsConv(const string name){
 	int count = 0;
 	for (auto it1 = layer->begin(); it1 != layer->end(); it1++){
 		if (it1->name() == name)
@@ -260,12 +326,12 @@ void Pruner::pruningConvByRate(const precord r, vector<int>* pchannelNeedPrune){
 			}
 
 			//start prune
-			filterPruning(it, pchannelNeedPrune, num);
+			filterPruning(it, pchannelNeedPrune);
 
 			//BatchNorm pruning and Scale Pruning
 			it++;
 			if (it->type() == "BatchNorm"){
-				batchNormPruning(it, pchannelNeedPrune, num);
+				batchNormPruning(it, pchannelNeedPrune);
 			}
 			break;
 			//end
@@ -284,26 +350,26 @@ void Pruner::pruningBottomByRate(const precord r, vector<int>* pchannelNeedPrune
 		for (it = layer->begin(); it != layer->end(); it++){
 			if (it->name() == conv1.first){
 				if (it->type() == "Convolution"){
-					channelPruning(it, pchannelNeedPrune, num);
+					channelPruning(it, pchannelNeedPrune);
 					break;
 				}
 				else if (it->type() == "ConvolutionDepthwise"){
-					filterPruning(it, pchannelNeedPrune, num);
+					filterPruning(it, pchannelNeedPrune);
 					it++;
 
 					//start prune batchNorm and Scale layer
 					if (it->type() == "BatchNorm"){
-						batchNormPruning(it, pchannelNeedPrune, num);
+						batchNormPruning(it, pchannelNeedPrune);
 
 					}
 					while (it->type() != "Convolution"){
 						it++;
 					}
 
-					//start prune pointwise conv layer next by depthwiseConv
+					//start prune pointwise conv layer which subsequent to depthwiseConv
 					string name1 = it->name();
 					if (it->type() == "Convolution"){
-						channelPruning(it, pchannelNeedPrune, num);
+						channelPruning(it, pchannelNeedPrune);
 					}
 
 					break;
@@ -315,65 +381,67 @@ void Pruner::pruningBottomByRate(const precord r, vector<int>* pchannelNeedPrune
 	}
 }
 
-void Pruner::batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* pchannelNeedPrune, int num_){
+void Pruner::batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* pchannelNeedPrune){
 	vector<int>::const_iterator beg = pchannelNeedPrune->begin();
 	vector<int>::const_iterator end = pchannelNeedPrune->end();
 	int cutNum = pchannelNeedPrune->size();
+	int_64 bn_count = iter_->blobs(0).shape().dim(0);
 	BlobProto *bnBlob0_ = it->mutable_blobs(0);
 	BlobProto bnBlob0 = it->blobs(0);
 	bnBlob0_->clear_data();
-	for (int j = 0; j < num_; j++){
+	for (int j = 0; j < bn_count; j++){
 		if (!findInt(beg, end, j)){
 			bnBlob0_->add_data(bnBlob0.data(j));
 		}
 	}
 	BlobShape shape0;
-	shape0.add_dim(num_ - cutNum);
+	shape0.add_dim(bn_count - cutNum);
 	bnBlob0_->mutable_shape()->CopyFrom(shape0);
 
 	BlobProto *bnBlob1_ = it->mutable_blobs(1);
 	BlobProto bnBlob1 = it->blobs(1);
 	bnBlob1_->clear_data();
-	for (int j = 0; j < num_; j++){
+	for (int j = 0; j < bn_count; j++){
 		if (!findInt(beg, end, j)){
 			bnBlob1_->add_data(bnBlob1.data(j));
 		}
 	}
 	BlobShape shape1;
-	shape1.add_dim(num_ - cutNum);
+	shape1.add_dim(bn_count - cutNum);
 	bnBlob1_->mutable_shape()->CopyFrom(shape1);
 	it++;
 
 	BlobProto *sBlob0_ = it->mutable_blobs(0);
 	BlobProto sBlob0 = it->blobs(0);
 	sBlob0_->clear_data();
-	for (int j = 0; j < num_; j++){
+	for (int j = 0; j < bn_count; j++){
 		if (!findInt(beg, end, j)){
 			sBlob0_->add_data(sBlob0.data(j));
 		}
 	}
 	BlobShape shape2;
-	shape2.add_dim(num_ - cutNum);
+	shape2.add_dim(bn_count - cutNum);
 	sBlob0_->mutable_shape()->CopyFrom(shape2);
 
 	BlobProto *sBlob1_ = it->mutable_blobs(1);
 	BlobProto sBlob1 = it->blobs(1);
 	sBlob1_->clear_data();
-	for (int j = 0; j < num_; j++){
+	for (int j = 0; j < bn_count; j++){
 		if (!findInt(beg, end, j)){
 			sBlob1_->add_data(sBlob1.data(j));
 		}
 	}
 	BlobShape shape3;
-	shape3.add_dim(num_ - cutNum);
+	shape3.add_dim(bn_count - cutNum);
 	sBlob1_->mutable_shape()->CopyFrom(shape3);
 
 }
 
-void Pruner::filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* pchannelNeedPrune, int num_){
-	int channels = it->blobs(0).shape().dim(1);
-	int height = it->blobs(0).shape().dim(2);
-	int width = it->blobs(0).shape().dim(3);
+void Pruner::filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* pchannelNeedPrune){
+	int_64 filter_count = it->blobs(0).shape().dim(0);
+	int_64 channels = it->blobs(0).shape().dim(1);
+	int_64 height = it->blobs(0).shape().dim(2);
+	int_64 width = it->blobs(0).shape().dim(3);
 	int count = channels * width * height;
 	int cutNum = pchannelNeedPrune->size();
 	BlobProto *blob_ = it->mutable_blobs(0);
@@ -381,7 +449,7 @@ void Pruner::filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerPar
 	blob_->clear_data();
 	vector<int>::const_iterator beg = pchannelNeedPrune->begin();
 	vector<int>::const_iterator end = pchannelNeedPrune->end();
-	for (int j = 0; j < num_; j++){
+	for (int j = 0; j < filter_count; j++){
 		if (!findInt(beg, end, j)){
 			for (int g = 0; g < count; g++){
 				blob_->add_data(blob.data(j*count + g));
@@ -389,7 +457,7 @@ void Pruner::filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerPar
 		}
 	}
 	BlobShape shape;
-	shape.add_dim(num_ - cutNum);
+	shape.add_dim(filter_count - cutNum);
 	shape.add_dim(channels);
 	shape.add_dim(height);
 	shape.add_dim(width);
@@ -400,26 +468,25 @@ void Pruner::filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerPar
 		BlobProto *blob_ = it->mutable_blobs(1);
 		BlobProto blob = it->blobs(1);
 		blob_->clear_data();
-		for (int j = 0; j < num_; j++){
+		for (int j = 0; j < filter_count; j++){
 			if (!findInt(beg, end, j)){
 				blob_->add_data(blob.data(j));
 			}
 		}
 		BlobShape shape;
-		shape.add_dim(num_ - cutNum);
+		shape.add_dim(filter_count - cutNum);
 		blob_->mutable_shape()->CopyFrom(shape);
 	}
 
-	it->mutable_convolution_param()->set_num_output(num_ - cutNum);
+	it->mutable_convolution_param()->set_num_output(filter_count - cutNum);
 }
 
-void Pruner::channelPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* pchannelNeedPrune, int num_){
-	int nextLayKerNum = iter_->blobs(0).shape().dim(0);
-	int nextLayChannel = iter_->blobs(0).shape().dim(1);
-	int nextLayKerH = iter_->blobs(0).shape().dim(2);
-	int nextLayKerW = iter_->blobs(0).shape().dim(3);
+void Pruner::channelPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, std::vector<int>* pchannelNeedPrune){
+	int_64 nextLayKerNum = iter_->blobs(0).shape().dim(0);
+	int_64 nextLayChannel = iter_->blobs(0).shape().dim(1);
+	int_64 nextLayKerH = iter_->blobs(0).shape().dim(2);
+	int_64 nextLayKerW = iter_->blobs(0).shape().dim(3);
 	int cutNum = pchannelNeedPrune->size();
-	int nextLayKerCount = (num_ - cutNum) * nextLayKerH * nextLayKerW;
 	int counts = nextLayChannel * nextLayKerH * nextLayKerW;
 	int dimSize = nextLayKerH * nextLayKerW;
 	BlobProto *blob1_ = iter_->mutable_blobs(0);
@@ -438,14 +505,14 @@ void Pruner::channelPruning(::google::protobuf::RepeatedPtrField< caffe::LayerPa
 	}
 	BlobShape shape1;
 	shape1.add_dim(nextLayKerNum);
-	shape1.add_dim(num_ - cutNum);
+	shape1.add_dim(nextLayChannel - cutNum);
 	shape1.add_dim(nextLayKerH);
 	shape1.add_dim(nextLayKerW);
 	blob1_->mutable_shape()->CopyFrom(shape1);
 
 }
 
-int  Pruner::writePrototxt(std::string prototxt1, std::string prototxt2){
+int  Pruner::writePrototxt(const std::string prototxt1, const std::string prototxt2){
 	std::fstream fin_in(pruning_proto_path, std::ios::in | std::ios::binary);
 	std::fstream fin_out(pruned_proto_path, std::ios::out | std::ios::binary);
 	if (!fin_in || !fin_out)
@@ -487,13 +554,86 @@ int  Pruner::writePrototxt(std::string prototxt1, std::string prototxt2){
 			else{
 				fin_out << "    num_output: " + std::to_string(prunedNum) << '\n';
 				nor_flag = false;
-
 			}
 		}
 		else{
 			fin_out << str << '\n';
-
 		}
 	}
 	return 1;
+}
+
+void Pruner::eltwiseCaculate(const peltwiserecord r, std::vector<int>* channelNeedPrune){
+	
+	unsigned blob_size;
+	vector<atom> convlayervalue;
+	convlayervalue.push_back(make_pair(-1, 1));
+	int_64 num, channels, height, width;
+	int count, cutNum;
+	for (it = layer->begin(); it != layer->end(); it++){
+		if (it->name() == r->second.at(0).first){
+			blob_size = it->blobs(0).data_size();
+		}
+	}
+
+	for (it = layer->begin(); it != layer->end(); it++){
+		if (it->name() == r->second.at(0).first){
+			num = it->blobs(0).shape().dim(0);
+			channels = it->blobs(0).shape().dim(1);
+			height = it->blobs(0).shape().dim(2);
+			width = it->blobs(0).shape().dim(3);
+			count = channels * width * height;
+			cutNum = r->second.at(0).second.first * r->second.at(0).second.second;
+		}
+	}
+	double *p_arr = new double[blob_size];
+	for (int i = 0; i<blob_size;i++){
+		p_arr[i] = 0;
+	}
+	for (string::size_type i = 0; i < r->second.size(); i++){
+		for (it = layer->begin();it != layer->end();it++){
+			if (it->name() == r->second.at(i).first){
+				BlobProto blobData = it->blobs(0);
+				for (int i = 0;i<blob_size;i++){
+					p_arr[i] = p_arr[i] + abs(blobData.data(i));
+				}
+				break;
+			}
+		}
+	}
+	for (int i = 0; i <num;i++){
+		double value = 0.0;
+		for (int j = 0; j < count; j++){
+			value += abs(p_arr[i*count + j]);
+		}
+		atom a = make_pair(i, value);
+		convlayervalue.push_back(a);
+	}
+	hS(&convlayervalue, 1, num);
+	for (int i = 0; i < cutNum; i++){
+		channelNeedPrune->push_back(convlayervalue.at(i + 1).first);
+	}	
+}
+
+void Pruner::pruningEltwiseByRate(const peltwiserecord r, std::vector<int>* channelNeedPrune){
+	for (auto iter = r->second.begin();iter != r->second.end();iter++){
+		for (it = layer->begin();it!=layer->end();it++){
+			if (it->name() == iter->first){
+				filterPruning(it, channelNeedPrune);
+				it++;
+				if (it->type() == "BatchNorm"){
+					batchNormPruning(it, channelNeedPrune);
+				}
+				break;
+			}
+		}
+	}
+	for (auto iter = r->first.begin(); iter != r->first.end(); iter++){
+		for (it = layer->begin(); it != layer->end(); it++){
+			if (it->name() == iter->first){
+				channelPruning(it, channelNeedPrune);
+				break;
+			}
+		}
+	}
 }
