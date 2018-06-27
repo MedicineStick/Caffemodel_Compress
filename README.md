@@ -4,4 +4,4 @@ It's an idea I've had floating around for a while , You can perform channel prun
 note: Caffemodel_Compress does not support to prune a convolution layer which subsequent to a eltwise layer for now, I know it's a little non-reboost , but still I'm working on it .
 
 
-updated 18/6/25 Already supported to elswsise pruning
+updated 18/6/25 Already supported to eltwise pruning
