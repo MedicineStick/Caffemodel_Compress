@@ -19,6 +19,7 @@ Pruner& Pruner::operator=(const Pruner &rhs){
 
 Pruner::Pruner(const string xml_path){
 	xml_Path = xml_path;
+	utility_ = boost::shared_ptr <Utility>(new Utility());
 }
 
 
@@ -56,11 +57,11 @@ void Pruner::read_XML(const string xml_path){
 			Sleep(1000);
 			continue;
 		}
-		double rate = atof(clayers.get<string>("<xmlattr>.cut").c_str());
+		double ratio = atof(clayers.get<string>("<xmlattr>.cut").c_str());
 		for (it = layer->begin(); it != layer->end(); it++){
 			if (name == it->name()){
-				pruning_rate.push_back(convParam(name, param(rate, it->blobs(0).shape().dim(0))));
-				convNeedRewriteOnPrototxt.push_back(convParam(it->name(), param(rate, it->blobs(0).shape().dim(0))));
+				pruning_ratio.push_back(convParam(name, param(ratio, it->blobs(0).shape().dim(0))));
+				convNeedRewriteOnPrototxt.push_back(convParam(it->name(), param(ratio, it->blobs(0).shape().dim(0))));
 				break;
 			}
 		}
@@ -68,7 +69,7 @@ void Pruner::read_XML(const string xml_path){
 
 	//Read Eltwise Prop from XML file
 	layers = configure.get_child("eltwise");
-	for (auto it1 = layers.begin(); it1 != layers.end();it1++){
+	for (auto it1 = layers.begin(); it1 != layers.end(); it1++){
 		convParams conv_channels_temps;
 		convParams conv_filters_temps;
 		auto clayers = it1->second;
@@ -76,7 +77,7 @@ void Pruner::read_XML(const string xml_path){
 			continue;
 		}
 		string name = clayers.get<string>("<xmlattr>.name");
-		double rate = atof(clayers.get<string>("<xmlattr>.cut").c_str());
+		double ratio = atof(clayers.get<string>("<xmlattr>.cut").c_str());
 
 		//Getting eltwise layers 'parameters
 		//Getting channels'paramters
@@ -88,7 +89,7 @@ void Pruner::read_XML(const string xml_path){
 			for (it = layer->begin(); it != layer->end(); it++){
 				if (*it2 == it->name()){
 					conv_temp.first = *it2;
-					conv_temp.second.first = rate;
+					conv_temp.second.first = ratio;
 					conv_temp.second.second = it->blobs(0).shape().dim(0);
 					conv_channels_temps.push_back(conv_temp);
 					break;
@@ -96,15 +97,15 @@ void Pruner::read_XML(const string xml_path){
 			}
 		}
 		//Getting filters' parameters 
-		for (auto it3 = filters.begin(); it3 != filters.end();it3++){
+		for (auto it3 = filters.begin(); it3 != filters.end(); it3++){
 			convParam conv_temp;
 			for (it = layer->begin(); it != layer->end(); it++){
 				if (*it3 == it->name()){
 					conv_temp.first = *it3;
-					conv_temp.second.first = rate;
+					conv_temp.second.first = ratio;
 					conv_temp.second.second = it->blobs(0).shape().dim(0);
 					conv_filters_temps.push_back(conv_temp);
-					convNeedRewriteOnPrototxt.push_back(convParam(it->name(), param(rate, it->blobs(0).shape().dim(0))));
+					convNeedRewriteOnPrototxt.push_back(convParam(it->name(), param(ratio, it->blobs(0).shape().dim(0))));
 					break;
 				}
 			}
@@ -114,11 +115,10 @@ void Pruner::read_XML(const string xml_path){
 }
 
 void Pruner::import(){
-	it = layer->begin();
-	auto iter1 = pruning_rate.begin();
-	while (iter1 != pruning_rate.end()){
+	auto iter1 = pruning_ratio.begin();
+	while (iter1 != pruning_ratio.end()){
 		it = layer->begin();
-		double rate = iter1->second.first;
+		double ratio = iter1->second.first;
 		convParams b1;
 		string prunedConvName = iter1->first;
 		string poolName = "konglusen";
@@ -129,15 +129,15 @@ void Pruner::import(){
 					if (prunedConvName == it->bottom(i)){
 						if (it->type() == "Convolution"){
 							if (prunedConvName == it->bottom(0)){
-								b1.push_back(convParam(it->name(), param(rate, it->blobs(0).shape().dim(0))));
+								b1.push_back(convParam(it->name(), param(ratio, it->blobs(0).shape().dim(0))));
 								break;
 							}
 						}
 						else if (it->type() == "ConvolutionDepthwise"){
 
 							if (prunedConvName == it->bottom(0)){
-								b1.push_back(convParam(it->name(), param(rate, it->blobs(0).shape().dim(0))));
-								convNeedRewriteOnPrototxt.push_back(convParam(it->name(), param(rate, it->blobs(0).shape().dim(0))));
+								b1.push_back(convParam(it->name(), param(ratio, it->blobs(0).shape().dim(0))));
+								convNeedRewriteOnPrototxt.push_back(convParam(it->name(), param(ratio, it->blobs(0).shape().dim(0))));
 								break;
 							}
 						}
@@ -147,7 +147,7 @@ void Pruner::import(){
 							for (auto it1 = it; it1 != layer->end(); it1++){
 								if (it1->type() == "Convolution" || it1->type() == "ConvolutionDepthwise"){
 									if (it1->bottom(0).find(poolName) != string::npos){
-										b1.push_back(convParam(it1->name(), param(rate, it1->blobs(0).shape().dim(0))));
+										b1.push_back(convParam(it1->name(), param(ratio, it1->blobs(0).shape().dim(0))));
 									}
 								}
 							}
@@ -165,16 +165,16 @@ void Pruner::import(){
 	}
 }
 
-void Pruner::pruningByRate(){
+void Pruner::pruningByratio(){
 	for (string::size_type i = 0; i < conv.size(); i++){
 		vector<int> channelNeedPrune;
-		pruningConvByRate(&conv.at(i), &channelNeedPrune);
-		pruningBottomByRate(&conv.at(i), &channelNeedPrune);
+		pruningConvByratio(&conv.at(i), &channelNeedPrune);
+		pruningBottomByratio(&conv.at(i), &channelNeedPrune);
 	}
 	for (string::size_type i = 0; i < eltwiseConv.size(); i++){
 		vector<int> channelNeedPrune;
 		eltwiseCaculate(&eltwiseConv.at(i), &channelNeedPrune);
-		pruningEltwiseByRate(&eltwiseConv.at(i), &channelNeedPrune);
+		pruningEltwiseByratio(&eltwiseConv.at(i), &channelNeedPrune);
 	}
 }
 
@@ -231,10 +231,10 @@ bool Pruner::checkIsConv(const string layerName){
 					it1++;
 					it1++;
 					if (it1->type() == "Split" || it1->type() == "Eltwise")
-					{
+					{ 
 						break;
 					}
-					else if (it1->type() == "PReLU" || it1->type() == "ReLU"){
+					else if (isNonLinear(it1->type())){
 						it1++;
 						if (it1->type() == "Split" || it1->type() == "Eltwise")
 						{
@@ -267,7 +267,7 @@ bool Pruner::checkIsConv(const string layerName){
 	return (count == 1) ? true : false;
 }
 
-void Pruner::pruningConvByRate(const precord r, vector<int>* pchannelNeedPrune){
+void Pruner::pruningConvByratio(const precord r, vector<int>* pchannelNeedPrune){
 
 	for (it = layer->begin(); it != layer->end(); it++){
 		if (r->first.first == it->name()){
@@ -301,7 +301,7 @@ void Pruner::pruningConvByRate(const precord r, vector<int>* pchannelNeedPrune){
 					atom a = make_pair(i, value / count);
 					convlayervalue.push_back(a);
 				}
-				utility.hS(&convlayervalue, 1, num);
+				utility_->hS(&convlayervalue, 1, num);
 				for (int i = 0; i < cutNum; i++){
 					pchannelNeedPrune->push_back(convlayervalue.at(i + 1).first);
 				}
@@ -315,7 +315,7 @@ void Pruner::pruningConvByRate(const precord r, vector<int>* pchannelNeedPrune){
 					atom a = make_pair(i, value);
 					convlayervalue.push_back(a);
 				}
-				utility.hS(&convlayervalue, 1, num);
+				utility_->hS(&convlayervalue, 1, num);
 				for (int i = 0; i < cutNum; i++){
 					pchannelNeedPrune->push_back(convlayervalue.at(i + 1).first);
 				}
@@ -329,7 +329,7 @@ void Pruner::pruningConvByRate(const precord r, vector<int>* pchannelNeedPrune){
 					atom a = make_pair(i, value);
 					convlayervalue.push_back(a);
 				}
-				utility.hS(&convlayervalue, 1, num);
+				utility_->hS(&convlayervalue, 1, num);
 				for (int i = 0; i < cutNum; i++){
 					pchannelNeedPrune->push_back(convlayervalue.at(i + 1).first);
 				}
@@ -339,12 +339,12 @@ void Pruner::pruningConvByRate(const precord r, vector<int>* pchannelNeedPrune){
 			}
 
 			//start prune
-			filterPruning(it, pchannelNeedPrune);
+			this->filterPruning(it, pchannelNeedPrune);
 
 			//BatchNorm pruning and Scale Pruning
 			it++;
 			if (it->type() == "BatchNorm"){
-				batchNormPruning(it, pchannelNeedPrune);
+				this->batchNormPruning(it, pchannelNeedPrune);
 			}
 			break;
 			//end
@@ -352,7 +352,7 @@ void Pruner::pruningConvByRate(const precord r, vector<int>* pchannelNeedPrune){
 	}
 }
 
-void Pruner::pruningBottomByRate(const precord r, vector<int>* pchannelNeedPrune){
+void Pruner::pruningBottomByratio(const precord r, vector<int>* pchannelNeedPrune){
 	//preform pruning on next layer 
 	int num = r->first.second.second;
 	int cutNum = (r->first.second.second)*(r->first.second.first);
@@ -363,16 +363,16 @@ void Pruner::pruningBottomByRate(const precord r, vector<int>* pchannelNeedPrune
 		for (it = layer->begin(); it != layer->end(); it++){
 			if (it->name() == conv1.first){
 				if (it->type() == "Convolution"){
-					channelPruning(it, pchannelNeedPrune);
+					this->channelPruning(it, pchannelNeedPrune);
 					break;
 				}
 				else if (it->type() == "ConvolutionDepthwise"){
-					filterPruning(it, pchannelNeedPrune);
+					this->filterPruning(it, pchannelNeedPrune);
 					it++;
 
 					//start prune batchNorm and Scale layer
 					if (it->type() == "BatchNorm"){
-						batchNormPruning(it, pchannelNeedPrune);
+						this->batchNormPruning(it, pchannelNeedPrune);
 
 					}
 					while (it->type() != "Convolution"){
@@ -382,7 +382,7 @@ void Pruner::pruningBottomByRate(const precord r, vector<int>* pchannelNeedPrune
 					//start prune pointwise conv layer which subsequent to depthwiseConv
 					string name1 = it->name();
 					if (it->type() == "Convolution"){
-						channelPruning(it, pchannelNeedPrune);
+						this->channelPruning(it, pchannelNeedPrune);
 					}
 
 					break;
@@ -394,16 +394,16 @@ void Pruner::pruningBottomByRate(const precord r, vector<int>* pchannelNeedPrune
 	}
 }
 
-void Pruner::batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, vector<int>* pchannelNeedPrune){
-	vector<int>::const_iterator beg = pchannelNeedPrune->begin();
-	vector<int>::const_iterator end = pchannelNeedPrune->end();
+void Pruner::batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, vector<int>* pchannelNeedPrune) const{
+	vector<int>::const_iterator beg = pchannelNeedPrune->cbegin();
+	vector<int>::const_iterator end = pchannelNeedPrune->cend();
 	int cutNum = pchannelNeedPrune->size();
 	int_64 bn_count = iter_->blobs(0).shape().dim(0);
 	BlobProto *bnBlob0_ = it->mutable_blobs(0);
 	BlobProto bnBlob0 = it->blobs(0);
 	bnBlob0_->clear_data();
 	for (int j = 0; j < bn_count; j++){
-		if (!utility.findInt(beg, end, j)){
+		if (find(beg, end, j) == pchannelNeedPrune->cend()){
 			bnBlob0_->add_data(bnBlob0.data(j));
 		}
 	}
@@ -415,7 +415,7 @@ void Pruner::batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::Layer
 	BlobProto bnBlob1 = it->blobs(1);
 	bnBlob1_->clear_data();
 	for (int j = 0; j < bn_count; j++){
-		if (!utility.findInt(beg, end, j)){
+		if (find(beg, end, j) == pchannelNeedPrune->cend()){
 			bnBlob1_->add_data(bnBlob1.data(j));
 		}
 	}
@@ -428,7 +428,7 @@ void Pruner::batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::Layer
 	BlobProto sBlob0 = it->blobs(0);
 	sBlob0_->clear_data();
 	for (int j = 0; j < bn_count; j++){
-		if (!utility.findInt(beg, end, j)){
+		if (find(beg, end, j) == pchannelNeedPrune->cend()){
 			sBlob0_->add_data(sBlob0.data(j));
 		}
 	}
@@ -440,7 +440,7 @@ void Pruner::batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::Layer
 	BlobProto sBlob1 = it->blobs(1);
 	sBlob1_->clear_data();
 	for (int j = 0; j < bn_count; j++){
-		if (!utility.findInt(beg, end, j)){
+		if (find(beg, end, j) == pchannelNeedPrune->cend()){
 			sBlob1_->add_data(sBlob1.data(j));
 		}
 	}
@@ -450,20 +450,20 @@ void Pruner::batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::Layer
 
 }
 
-void Pruner::filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, vector<int>* pchannelNeedPrune){
-	int_64 filter_count = it->blobs(0).shape().dim(0);
-	int_64 channels = it->blobs(0).shape().dim(1);
-	int_64 height = it->blobs(0).shape().dim(2);
-	int_64 width = it->blobs(0).shape().dim(3);
+void Pruner::filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, vector<int>* pchannelNeedPrune) const{
+	int_64 filter_count = iter_->blobs(0).shape().dim(0);
+	int_64 channels = iter_->blobs(0).shape().dim(1);
+	int_64 height = iter_->blobs(0).shape().dim(2);
+	int_64 width = iter_->blobs(0).shape().dim(3);
 	int count = channels * width * height;
 	int cutNum = pchannelNeedPrune->size();
-	BlobProto *blob_ = it->mutable_blobs(0);
-	BlobProto blob = it->blobs(0);
+	BlobProto *blob_ = iter_->mutable_blobs(0);
+	BlobProto blob = iter_->blobs(0);
 	blob_->clear_data();
-	vector<int>::const_iterator beg = pchannelNeedPrune->begin();
-	vector<int>::const_iterator end = pchannelNeedPrune->end();
+	vector<int>::const_iterator beg = pchannelNeedPrune->cbegin();
+	vector<int>::const_iterator end = pchannelNeedPrune->cend();
 	for (int j = 0; j < filter_count; j++){
-		if (!utility.findInt(beg, end, j)){
+		if (find(beg, end, j) == pchannelNeedPrune->cend()){
 			for (int g = 0; g < count; g++){
 				blob_->add_data(blob.data(j*count + g));
 			}
@@ -478,11 +478,11 @@ void Pruner::filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerPar
 
 	// We will perform bias update based if the bias of conv existed.
 	if (it->blobs_size() > 1){
-		BlobProto *blob_ = it->mutable_blobs(1);
-		BlobProto blob = it->blobs(1);
+		BlobProto *blob_ = iter_->mutable_blobs(1);
+		BlobProto blob = iter_->blobs(1);
 		blob_->clear_data();
 		for (int j = 0; j < filter_count; j++){
-			if (!utility.findInt(beg, end, j)){
+			if (find(beg, end, j) == pchannelNeedPrune->cend()){
 				blob_->add_data(blob.data(j));
 			}
 		}
@@ -494,7 +494,7 @@ void Pruner::filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerPar
 	it->mutable_convolution_param()->set_num_output(filter_count - cutNum);
 }
 
-void Pruner::channelPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, vector<int>* pchannelNeedPrune){
+void Pruner::channelPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, vector<int>* pchannelNeedPrune) const{
 	int_64 nextLayKerNum = iter_->blobs(0).shape().dim(0);
 	int_64 nextLayChannel = iter_->blobs(0).shape().dim(1);
 	int_64 nextLayKerH = iter_->blobs(0).shape().dim(2);
@@ -505,11 +505,11 @@ void Pruner::channelPruning(::google::protobuf::RepeatedPtrField< caffe::LayerPa
 	BlobProto *blob1_ = iter_->mutable_blobs(0);
 	BlobProto blob1 = iter_->blobs(0);
 	blob1_->clear_data();
-	vector<int>::const_iterator beg = pchannelNeedPrune->begin();
-	vector<int>::const_iterator end = pchannelNeedPrune->end();
+	vector<int>::const_iterator beg = pchannelNeedPrune->cbegin();
+	vector<int>::const_iterator end = pchannelNeedPrune->cend();
 	for (int j = 0; j < nextLayKerNum; j++){
 		for (int g = 0; g < nextLayChannel; g++){
-			if (!utility.findInt(beg, end, g)){
+			if (find(beg, end, g) == pchannelNeedPrune->cend()){
 				for (int m = 0; m < dimSize; m++){
 					blob1_->add_data(blob1.data(j * counts + g * dimSize + m));
 				}
@@ -598,34 +598,34 @@ void Pruner::eltwiseCaculate(const peltwiserecord r, vector<int>* channelNeedPru
 				count = channels * width * height;
 				cutNum = r->second.at(0).second.first * r->second.at(0).second.second;
 				BlobProto blobData = it->blobs(0);
-				for (int_64 j = 0; j < num;j++){
+				for (int_64 j = 0; j < num; j++){
 					double value = 0.0;
-					for (int k = 0; k < count;k++){
+					for (int k = 0; k < count; k++){
 						value += abs(blobData.data(j*count + k));
 					}
-					p_arr[i] = p_arr[i] + value/count;
-				}			 
+					p_arr[i] = p_arr[i] + value / count;
+				}
 			}
 		}
 	}
-	for (int i = 0; i < blob_size;i++){
+	for (int i = 0; i < blob_size; i++){
 		atom a = make_pair(i, p_arr[i]);
 		convlayervalue.push_back(a);
 	}
-	utility.hS(&convlayervalue, 1, blob_size);
+	utility_->hS(&convlayervalue, 1, blob_size);
 	for (int i = 0; i < cutNum; i++){
 		channelNeedPrune->push_back(convlayervalue.at(i + 1).first);
 	}
 }
 
-void Pruner::pruningEltwiseByRate(const peltwiserecord r, vector<int>* channelNeedPrune){
+void Pruner::pruningEltwiseByratio(const peltwiserecord r, vector<int>* channelNeedPrune){
 	for (auto iter = r->second.begin(); iter != r->second.end(); iter++){
 		for (it = layer->begin(); it != layer->end(); it++){
 			if (it->name() == iter->first){
-				filterPruning(it, channelNeedPrune);
+				this->filterPruning(it, channelNeedPrune);
 				it++;
 				if (it->type() == "BatchNorm"){
-					batchNormPruning(it, channelNeedPrune);
+					this->batchNormPruning(it, channelNeedPrune);
 				}
 				break;
 			}
@@ -634,7 +634,7 @@ void Pruner::pruningEltwiseByRate(const peltwiserecord r, vector<int>* channelNe
 	for (auto iter = r->first.begin(); iter != r->first.end(); iter++){
 		for (it = layer->begin(); it != layer->end(); it++){
 			if (it->name() == iter->first){
-				channelPruning(it, channelNeedPrune);
+				this->channelPruning(it, channelNeedPrune);
 				break;
 			}
 		}
@@ -659,10 +659,10 @@ pair<vector<string>, vector<string>> Pruner::eltwiseTravel(const string eltwiseN
 	vector<string> splitLayers;
 	vector<string> filters;
 	vector<string> channels;
-	findDown(eltwiseName, &eltwiseLayers, &splitLayers);
-	string conv_temp = findUp(eltwiseName, &eltwiseLayers, &splitLayers);
-	filters = findUpFilters(&eltwiseLayers, &splitLayers);
-	channels = findUpChannels(&eltwiseLayers, &splitLayers);
+	this->findDown(eltwiseName, &eltwiseLayers, &splitLayers);
+	string conv_temp = this->findUp(eltwiseName, &eltwiseLayers, &splitLayers);
+	filters = this->findUpFilters(&eltwiseLayers, &splitLayers);
+	channels = this->findUpChannels(&eltwiseLayers, &splitLayers);
 	if ("stop" != conv_temp){
 		channels.push_back(conv_temp);
 	}
@@ -709,7 +709,7 @@ vector<string> Pruner::findUpFilters(const vector<string>* eltwiseLayers, const 
 		if (it->type() == "Eltwise" || it->type() == "Pooling"){
 			continue;
 		}
-		else if(it->type() == "ReLU" || it->type() == "PReLU" ){
+		else if (isNonLinear(it->type())){
 			it--;
 			if (it->type() == "Eltwise"){
 				continue;
@@ -743,16 +743,16 @@ string Pruner::findDown(const string layerName, vector<string>* eltwiseLayers, v
 					it--;
 				}
 				it--;
-				if (it->type() == "ReLU" || it->type() == "PReLU"){
+				if (isNonLinear(it->type())){
 					it--;
 					if (it->type() == "Eltwise"){
 						eltwiseLayers->push_back(it->name());
-						return findDown(it->name(), eltwiseLayers, splitLayers);
+						return this->findDown(it->name(), eltwiseLayers, splitLayers);
 					}
 				}
 				else if (it->type() == "Eltwise"){
 					eltwiseLayers->push_back(it->name());
-					return findDown(it->name(), eltwiseLayers, splitLayers);
+					return this->findDown(it->name(), eltwiseLayers, splitLayers);
 				}
 				else
 				{
