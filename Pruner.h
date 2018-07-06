@@ -115,9 +115,6 @@ public:
 		const std::string prototxt1, \
 		const std::string prototxt2); \
 
-		void batchNormPruning(\
-		::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, \
-		std::vector<int>* channelNeedPrune) const; \
 		void filterPruning(\
 		::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, \
 		std::vector<int>* channelNeedPrune) const; \
