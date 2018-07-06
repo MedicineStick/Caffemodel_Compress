@@ -341,13 +341,6 @@ void Pruner::pruningConvByratio(const precord r, vector<int>* pchannelNeedPrune)
 			//start prune
 			this->filterPruning(it, pchannelNeedPrune);
 
-			//BatchNorm pruning and Scale Pruning
-			it++;
-			if (it->type() == "BatchNorm"){
-				this->batchNormPruning(it, pchannelNeedPrune);
-			}
-			break;
-			//end
 		}
 	}
 }
@@ -370,11 +363,6 @@ void Pruner::pruningBottomByratio(const precord r, vector<int>* pchannelNeedPrun
 					this->filterPruning(it, pchannelNeedPrune);
 					it++;
 
-					//start prune batchNorm and Scale layer
-					if (it->type() == "BatchNorm"){
-						this->batchNormPruning(it, pchannelNeedPrune);
-
-					}
 					while (it->type() != "Convolution"){
 						it++;
 					}
@@ -392,62 +380,6 @@ void Pruner::pruningBottomByratio(const precord r, vector<int>* pchannelNeedPrun
 		}
 
 	}
-}
-
-void Pruner::batchNormPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, vector<int>* pchannelNeedPrune) const{
-	vector<int>::const_iterator beg = pchannelNeedPrune->cbegin();
-	vector<int>::const_iterator end = pchannelNeedPrune->cend();
-	int cutNum = pchannelNeedPrune->size();
-	int_64 bn_count = iter_->blobs(0).shape().dim(0);
-	BlobProto *bnBlob0_ = it->mutable_blobs(0);
-	BlobProto bnBlob0 = it->blobs(0);
-	bnBlob0_->clear_data();
-	for (int j = 0; j < bn_count; j++){
-		if (find(beg, end, j) == pchannelNeedPrune->cend()){
-			bnBlob0_->add_data(bnBlob0.data(j));
-		}
-	}
-	BlobShape shape0;
-	shape0.add_dim(bn_count - cutNum);
-	bnBlob0_->mutable_shape()->CopyFrom(shape0);
-
-	BlobProto *bnBlob1_ = it->mutable_blobs(1);
-	BlobProto bnBlob1 = it->blobs(1);
-	bnBlob1_->clear_data();
-	for (int j = 0; j < bn_count; j++){
-		if (find(beg, end, j) == pchannelNeedPrune->cend()){
-			bnBlob1_->add_data(bnBlob1.data(j));
-		}
-	}
-	BlobShape shape1;
-	shape1.add_dim(bn_count - cutNum);
-	bnBlob1_->mutable_shape()->CopyFrom(shape1);
-	it++;
-
-	BlobProto *sBlob0_ = it->mutable_blobs(0);
-	BlobProto sBlob0 = it->blobs(0);
-	sBlob0_->clear_data();
-	for (int j = 0; j < bn_count; j++){
-		if (find(beg, end, j) == pchannelNeedPrune->cend()){
-			sBlob0_->add_data(sBlob0.data(j));
-		}
-	}
-	BlobShape shape2;
-	shape2.add_dim(bn_count - cutNum);
-	sBlob0_->mutable_shape()->CopyFrom(shape2);
-
-	BlobProto *sBlob1_ = it->mutable_blobs(1);
-	BlobProto sBlob1 = it->blobs(1);
-	sBlob1_->clear_data();
-	for (int j = 0; j < bn_count; j++){
-		if (find(beg, end, j) == pchannelNeedPrune->cend()){
-			sBlob1_->add_data(sBlob1.data(j));
-		}
-	}
-	BlobShape shape3;
-	shape3.add_dim(bn_count - cutNum);
-	sBlob1_->mutable_shape()->CopyFrom(shape3);
-
 }
 
 void Pruner::filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, vector<int>* pchannelNeedPrune) const{
@@ -477,7 +409,7 @@ void Pruner::filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerPar
 	blob_->mutable_shape()->CopyFrom(shape);
 
 	// We will perform bias update based if the bias of conv existed.
-	if (it->blobs_size() > 1){
+	if (iter_->blobs_size() > 1){
 		BlobProto *blob_ = iter_->mutable_blobs(1);
 		BlobProto blob = iter_->blobs(1);
 		blob_->clear_data();
@@ -491,7 +423,59 @@ void Pruner::filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerPar
 		blob_->mutable_shape()->CopyFrom(shape);
 	}
 
-	it->mutable_convolution_param()->set_num_output(filter_count - cutNum);
+	iter_->mutable_convolution_param()->set_num_output(filter_count - cutNum);
+
+	if ((++iter_)->type() == "BatchNorm"){
+		int_64 bn_count = iter_->blobs(0).shape().dim(0);
+		BlobProto *bnBlob0_ = iter_->mutable_blobs(0);
+		BlobProto bnBlob0 = iter_->blobs(0);
+		bnBlob0_->clear_data();
+		for (int j = 0; j < bn_count; j++){
+			if (find(beg, end, j) == pchannelNeedPrune->cend()){
+				bnBlob0_->add_data(bnBlob0.data(j));
+			}
+		}
+		BlobShape shape0;
+		shape0.add_dim(bn_count - cutNum);
+		bnBlob0_->mutable_shape()->CopyFrom(shape0);
+
+		BlobProto *bnBlob1_ = iter_->mutable_blobs(1);
+		BlobProto bnBlob1 = iter_->blobs(1);
+		bnBlob1_->clear_data();
+		for (int j = 0; j < bn_count; j++){
+			if (find(beg, end, j) == pchannelNeedPrune->cend()){
+				bnBlob1_->add_data(bnBlob1.data(j));
+			}
+		}
+		BlobShape shape1;
+		shape1.add_dim(bn_count - cutNum);
+		bnBlob1_->mutable_shape()->CopyFrom(shape1);
+		iter_++;
+
+		BlobProto *sBlob0_ = iter_->mutable_blobs(0);
+		BlobProto sBlob0 = iter_->blobs(0);
+		sBlob0_->clear_data();
+		for (int j = 0; j < bn_count; j++){
+			if (find(beg, end, j) == pchannelNeedPrune->cend()){
+				sBlob0_->add_data(sBlob0.data(j));
+			}
+		}
+		BlobShape shape2;
+		shape2.add_dim(bn_count - cutNum);
+		sBlob0_->mutable_shape()->CopyFrom(shape2);
+
+		BlobProto *sBlob1_ = iter_->mutable_blobs(1);
+		BlobProto sBlob1 = iter_->blobs(1);
+		sBlob1_->clear_data();
+		for (int j = 0; j < bn_count; j++){
+			if (find(beg, end, j) == pchannelNeedPrune->cend()){
+				sBlob1_->add_data(sBlob1.data(j));
+			}
+		}
+		BlobShape shape3;
+		shape3.add_dim(bn_count - cutNum);
+		sBlob1_->mutable_shape()->CopyFrom(shape3);
+	}
 }
 
 void Pruner::channelPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, vector<int>* pchannelNeedPrune) const{
@@ -623,11 +607,6 @@ void Pruner::pruningEltwiseByratio(const peltwiserecord r, vector<int>* channelN
 		for (it = layer->begin(); it != layer->end(); it++){
 			if (it->name() == iter->first){
 				this->filterPruning(it, channelNeedPrune);
-				it++;
-				if (it->type() == "BatchNorm"){
-					this->batchNormPruning(it, channelNeedPrune);
-				}
-				break;
 			}
 		}
 	}
