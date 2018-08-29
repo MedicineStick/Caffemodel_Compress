@@ -6,7 +6,7 @@
 </PruningMode>
 
 
-<!-- 8:norm 11:L1  12:L2 -->
+<!-- 8:norm 11:L1  12:L2  16:VARIANCE-->
 <ConvCalculateMode>
 	<mode>11</mode>
 </ConvCalculateMode>
