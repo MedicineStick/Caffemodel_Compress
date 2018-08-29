@@ -7,6 +7,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 #include "caffe/proto/caffe.pb.h"
+#include "caffe/blob.hpp"
 
 typedef google::protobuf::int64 int_64;
 typedef std::pair<int, double> atom;
@@ -67,6 +68,8 @@ public:
 	typedef std::pair<convParams, convParams> eltwiseRecord;
 	typedef record* precord;
 	typedef eltwiseRecord* peltwiserecord;
+	typedef ::google::protobuf::RepeatedField< double > caffe_double_;
+	typedef const ::google::protobuf::RepeatedField< double >& caffe_double_data_;
 
 	Pruner() = default;
 	Pruner(const Pruner&);
@@ -135,9 +138,11 @@ private:
 	std::string pruned_proto_path;
 	std::string txt_proto_path;
 
+	
+
 	const enum ConvCalculateMode
 	{
-		Norm = 8, L1 = 11, L2 = 12
+		Norm = 8, L1 = 11, L2 = 12,Variance = 16
 	};
 	const enum PruningMode
 	{
