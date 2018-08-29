@@ -3,6 +3,7 @@
 #include <cmath>
 #include <fstream>
 #include <windows.h>
+#include "caffe/util/math_functions.hpp"
 
 using namespace caffe;
 using namespace std;
@@ -115,6 +116,11 @@ void Pruner::read_XML(const string xml_path){
 }
 
 void Pruner::import(){
+	/*for (it = layer->begin(); it->name() != "conv1_bn"; ++it);
+	it->blobs(0).num();
+	string x1 = it->name();
+	int x = it->blobs(0).shape().dim(0);*/
+
 	auto iter1 = pruning_ratio.begin();
 	while (iter1 != pruning_ratio.end()){
 		it = layer->begin();
@@ -143,10 +149,20 @@ void Pruner::import(){
 						}
 
 						else if (it->type() == "Pooling"){
-							poolName = it->name();
+							it++;
+							vector<string> top_names_;
+							if (it->type() == "Split"){
+								for (size_t i = 0; i < it->top_size(); i++){
+									top_names_.push_back(it->top(i));
+								}
+							}
+							else{
+								top_names_.push_back(it->top(i));
+							}
+
 							for (auto it1 = it; it1 != layer->end(); it1++){
 								if (it1->type() == "Convolution" || it1->type() == "ConvolutionDepthwise"){
-									if (it1->bottom(0).find(poolName) != string::npos){
+									if (find(top_names_.begin(), top_names_.end(), it1->bottom(0)) != top_names_.end()){
 										b1.push_back(convParam(it1->name(), param(ratio, it1->blobs(0).shape().dim(0))));
 									}
 								}
@@ -231,7 +247,7 @@ bool Pruner::checkIsConv(const string layerName){
 					it1++;
 					it1++;
 					if (it1->type() == "Split" || it1->type() == "Eltwise")
-					{ 
+					{
 						break;
 					}
 					else if (isNonLinear(it1->type())){
@@ -277,16 +293,54 @@ void Pruner::pruningConvByratio(const precord r, vector<int>* pchannelNeedPrune)
 			int channels = it->blobs(0).shape().dim(1);
 			int height = it->blobs(0).shape().dim(2);
 			int width = it->blobs(0).shape().dim(3);
-			int count = channels * width * height;
+			int spatial_dim = channels * width * height;
+			int data_count = num * spatial_dim;
 			int cutNum = (r->first.second.second)*(r->first.second.first);
+
+			// oblas calculate
+			Blob<double> mean_, variance_, temp_;
+			Blob<double> spatial_sum_multiplier_, filter_data_;
+			Blob<double> num_temp_, num_temp_1, num_temp_2;
+			//BlobProto
+
+			vector<int> sz;
+			sz.push_back(spatial_dim);
+			spatial_sum_multiplier_.Reshape(sz);
+
+			double* multiplier_data = spatial_sum_multiplier_.mutable_cpu_data();
+			caffe_set(spatial_sum_multiplier_.count(), double(1), multiplier_data);
+			//Blob<float> filter_data_ = 
 
 			//Modifying the kernel heap by traveling through the computed-average-kernel's -size then sort 
 			BlobProto blobData = it->blobs(0);
+			BlobProto blobData1;
 			double maxData = 0.0;
 			int k = blobData.data_size();
-
+			filter_data_.FromProto(blobData, true);
+			sz[0] = num;
+			mean_.Reshape(sz);
+			temp_.Reshape(sz);
+			variance_.Reshape(sz);
+			sz[0] = num*spatial_dim;
+			num_temp_.Reshape(sz);
+			num_temp_1.FromProto(blobData, true);
+			num_temp_2.Reshape(sz);
 			switch (convCalculateMode)
 			{
+			case Pruner::Variance:
+				caffe_cpu_gemv<double>(CblasNoTrans, num, spatial_dim, 1. / spatial_dim, filter_data_.cpu_data(),
+					spatial_sum_multiplier_.cpu_data(), 0., mean_.mutable_cpu_data());
+				caffe_cpu_gemm<double>(CblasNoTrans, CblasNoTrans, spatial_dim, num, 1, -1,
+					spatial_sum_multiplier_.cpu_data(), mean_.cpu_data(), 1, num_temp_1.mutable_cpu_data());
+				caffe_powx(num_temp_1.count(), num_temp_1.cpu_data(), double(2), num_temp_2.mutable_cpu_data());
+				caffe_cpu_gemv<double>(CblasNoTrans, num, spatial_dim, 1. / spatial_dim, num_temp_2.cpu_data(),
+					spatial_sum_multiplier_.cpu_data(), 0., variance_.mutable_cpu_data());
+				variance_.ToProto(&blobData1, false);
+				for (size_t i = 0; i < variance_.count(); i++){
+					atom a = make_pair(i, blobData1.double_data(i));
+					convlayervalue.push_back(a);
+				}
+				break;
 			case Pruner::Norm:
 				for (size_t i = 0; i < blobData.data_size(); i++){
 					if (maxData < abs(blobData.data(i))){
@@ -295,49 +349,41 @@ void Pruner::pruningConvByratio(const precord r, vector<int>* pchannelNeedPrune)
 				}
 				for (int i = 0; i < num; i++){
 					double value = 0.0;
-					for (int j = 0; j < count; j++){
-						value += abs(blobData.data(i*count + j)) / maxData;
+					for (int j = 0; j < spatial_dim; j++){
+						value += abs(blobData.data(i*spatial_dim + j)) / maxData;
 					}
-					atom a = make_pair(i, value / count);
+					atom a = make_pair(i, value / spatial_dim);
 					convlayervalue.push_back(a);
 				}
-				utility_->hS(&convlayervalue, 1, num);
-				for (int i = 0; i < cutNum; i++){
-					pchannelNeedPrune->push_back(convlayervalue.at(i + 1).first);
-				}
+
 				break;
 			case Pruner::L1:
-				for (int i = 0; i < num; i++){
-					double value = 0.0;
-					for (int j = 0; j < count; j++){
-						value += abs(blobData.data(i*count + j));
-					}
-					atom a = make_pair(i, value);
+				caffe_abs(filter_data_.count(), filter_data_.cpu_data(), filter_data_.mutable_cpu_data());
+				caffe_cpu_gemv<double>(CblasNoTrans, num, spatial_dim, 1. / spatial_dim, filter_data_.cpu_data(),
+					spatial_sum_multiplier_.cpu_data(), 0., temp_.mutable_cpu_data());
+				temp_.ToProto(&blobData1, false);
+				for (size_t i = 0; i < temp_.count(); i++){
+					atom a = make_pair(i, blobData1.double_data(i));
 					convlayervalue.push_back(a);
-				}
-				utility_->hS(&convlayervalue, 1, num);
-				for (int i = 0; i < cutNum; i++){
-					pchannelNeedPrune->push_back(convlayervalue.at(i + 1).first);
 				}
 				break;
 			case Pruner::L2:
-				for (int i = 0; i < num; i++){
-					double value = 0.0;
-					for (int j = 0; j < count; j++){
-						value += (blobData.data(i*count + j))*(blobData.data(i*count + j));
-					}
-					atom a = make_pair(i, value);
+				caffe_powx(filter_data_.count(), filter_data_.cpu_data(), double(2), filter_data_.mutable_cpu_data());
+				caffe_cpu_gemv<double>(CblasNoTrans, num, spatial_dim, 1. / spatial_dim, filter_data_.cpu_data(),
+					spatial_sum_multiplier_.cpu_data(), 0., temp_.mutable_cpu_data());
+				temp_.ToProto(&blobData1, false);
+				for (size_t i = 0; i < temp_.count(); i++){
+					atom a = make_pair(i, blobData1.double_data(i));
 					convlayervalue.push_back(a);
-				}
-				utility_->hS(&convlayervalue, 1, num);
-				for (int i = 0; i < cutNum; i++){
-					pchannelNeedPrune->push_back(convlayervalue.at(i + 1).first);
 				}
 				break;
 			default:
 				break;
 			}
-
+			utility_->hS(&convlayervalue, 1, num);
+			for (int i = 0; i < cutNum; i++){
+				pchannelNeedPrune->push_back(convlayervalue.at(i + 1).first);
+			}
 			//start prune
 			this->filterPruning(it, pchannelNeedPrune);
 
@@ -479,6 +525,7 @@ void Pruner::filterPruning(::google::protobuf::RepeatedPtrField< caffe::LayerPar
 }
 
 void Pruner::channelPruning(::google::protobuf::RepeatedPtrField< caffe::LayerParameter >::iterator iter_, vector<int>* pchannelNeedPrune) const{
+
 	int_64 nextLayKerNum = iter_->blobs(0).shape().dim(0);
 	int_64 nextLayChannel = iter_->blobs(0).shape().dim(1);
 	int_64 nextLayKerH = iter_->blobs(0).shape().dim(2);
