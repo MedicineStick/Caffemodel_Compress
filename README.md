@@ -1,6 +1,4 @@
-# Caffemodel_Compress
-
-<<Deep Compression: Compressing Deep Neural Networks with Pruning, Trained Quantization and Huffman Coding>>
+# Caffemodel_Compress# <<Deep Compression: Compressing Deep Neural Networks with Pruning, Trained Quantization and Huffman Coding>>
 
 Song Han, Huizi Mao, William J. Dally
 (Submitted on 1 Oct 2015 (v1), last revised 15 Feb 2016 (this version, v5))
