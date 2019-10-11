@@ -133,6 +133,11 @@ void Pruner::import(){
 			if (it->bottom_size() != 0){
 				for (int i = 0; i < it->bottom_size(); i++){
 					if (prunedConvName == it->bottom(i)){
+						
+						if(it->type()=="ReLU"){
+							++it;
+						cout<<it->name() <<endl;
+						}
 						if (it->type() == "Convolution"){
 							if (prunedConvName == it->bottom(0)){
 								b1.push_back(convParam(it->name(), param(ratio, it->blobs(0).shape().dim(0))));
@@ -162,7 +167,7 @@ void Pruner::import(){
 
 							for (auto it1 = it; it1 != layer->end(); it1++){
 								if (it1->type() == "Convolution" || it1->type() == "ConvolutionDepthwise"){
-									if (find(top_names_.begin(), top_names_.end(), it1->bottom(0)) != top_names_.end()){
+									if (find(top_names_.begin(), top_names_.end(), it1->name()) != top_names_.end()){
 										b1.push_back(convParam(it1->name(), param(ratio, it1->blobs(0).shape().dim(0))));
 									}
 								}
