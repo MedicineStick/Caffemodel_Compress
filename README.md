@@ -3,9 +3,6 @@
 Song Han, Huizi Mao, William J. Dally
 (Submitted on 1 Oct 2015 (v1), last revised 15 Feb 2016 (this version, v5))
 
-A c++ project what performing CNN channel pruning
-It's an idea I've had floating around for a while , You can perform channel pruning on your trained caffemodel by using this tool, A XML file you should recollocate first,irrespective of whether depthwise or convolution layer, when convolution layer which need to prune has been setting, a reciprocal arrangement of channel pruning also has been setting during processing of progress implicitly, then do a little path change in main.cpp ,and build it with your local IDE.
+This C++ project implements CNN channel pruning, an idea I've been considering for a while. You can prune channels in your trained Caffe model using this tool. First, ensure you have the XML file relocated, regardless of whether you’re working with depthwise or convolutional layers. When setting up the layers for pruning, the corresponding channel pruning arrangement is implicitly configured. You’ll also need to make a minor change in main.cpp and build the project with your local IDE.
 
-
-updated 18/6/25 Already supported to eltwise pruning
-mac...
+Updated 18/6/25: Eltwise pruning on Mac is now supported.
